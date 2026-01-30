@@ -1,0 +1,161 @@
+{
+  "_meta": {
+    "schema_version": "4.0",
+    "engine": "Offline Static Validator",
+    "confidence_model": "adaptive-rule-weighted",
+    "supports_rag": true,
+    "adaptive_features": {
+      "dynamic_severity": true,
+      "probabilistic_autofix": true,
+      "context_scoring": true,
+      "deployment_gating": true
+    }
+  },
+
+  "SyntaxError": {
+    "category": "Syntax",
+    "severity": { "label": "Critical", "base_score": 100 },
+    "confidence": 0.99,
+    "confidence_decay": 0.9,
+    "blocking": true,
+    "auto_fix": {
+      "allowed": false,
+      "risk": "High",
+      "probability_safe": 0.0
+    },
+    "rollback": { "recommended": true },
+    "impact": {
+      "runtime": "Immediate failure",
+      "maintainability": "Blocked",
+      "security": "Neutral"
+    },
+    "ast_signature": ["ParserFailure"]
+  },
+
+  "IndentationError": {
+    "category": "Syntax",
+    "severity": { "label": "Critical", "base_score": 90 },
+    "confidence": 0.97,
+    "confidence_decay": 0.92,
+    "blocking": true,
+    "auto_fix": {
+      "allowed": true,
+      "risk": "Low",
+      "probability_safe": 0.85
+    },
+    "rollback": { "recommended": false },
+    "ast_signature": ["IndentationError"]
+  },
+
+  "UndefinedVariable": {
+    "category": "Semantic",
+    "severity": { "label": "High", "base_score": 85 },
+    "confidence": 0.88,
+    "confidence_decay": 0.8,
+    "blocking": true,
+    "auto_fix": {
+      "allowed": false,
+      "risk": "High",
+      "probability_safe": 0.0
+    },
+    "rollback": { "recommended": true },
+    "false_positive_notes": "May occur in dynamic/global scopes",
+    "ast_signature": ["Name.Load without prior Store"],
+    "adaptive_scoring": {
+      "context_sensitivity": true,
+      "dynamic_severity": true
+    }
+  },
+
+  "UnusedVariable": {
+    "category": "Maintainability",
+    "severity": { "label": "Low", "base_score": 30 },
+    "confidence": 0.9,
+    "confidence_decay": 0.95,
+    "blocking": false,
+    "auto_fix": {
+      "allowed": true,
+      "risk": "Very Low",
+      "probability_safe": 0.95
+    },
+    "rollback": { "recommended": false },
+    "ast_signature": ["Name.Store without Load"]
+  },
+
+  "InfiniteLoopRisk": {
+    "category": "Logic",
+    "severity": { "label": "High", "base_score": 80 },
+    "confidence": 0.75,
+    "confidence_decay": 0.85,
+    "blocking": false,
+    "auto_fix": {
+      "allowed": false,
+      "risk": "High",
+      "probability_safe": 0.0
+    },
+    "rollback": { "recommended": true },
+    "false_positive_notes": "Intentional infinite loops possible in servers",
+    "ast_signature": ["While True without Break"],
+    "adaptive_scoring": {
+      "behavioral_context": true,
+      "deployment_sensitivity": true
+    }
+  },
+
+  "BareExcept": {
+    "category": "Reliability",
+    "severity": { "label": "Medium", "base_score": 60 },
+    "confidence": 0.95,
+    "confidence_decay": 0.9,
+    "blocking": false,
+    "auto_fix": {
+      "allowed": true,
+      "risk": "Medium",
+      "probability_safe": 0.7
+    },
+    "rollback": { "recommended": false },
+    "ast_signature": ["ExceptHandler without type"]
+  },
+
+  "SecurityViolation": {
+    "category": "Security",
+    "severity": { "label": "Critical", "base_score": 100 },
+    "confidence": 0.98,
+    "confidence_decay": 0.85,
+    "blocking": true,
+    "auto_fix": {
+      "allowed": false,
+      "risk": "Extreme",
+      "probability_safe": 0.0
+    },
+    "rollback": { "recommended": true },
+    "industry_mapping": {
+      "CWE": ["CWE-94"],
+      "OWASP": ["A03:2021-Injection"]
+    },
+    "ast_signature": ["Call(eval)", "Call(exec)"],
+    "adaptive_scoring": {
+      "security_context": true,
+      "deployment_sensitivity": true
+    }
+  },
+
+  "StructuralRegression": {
+    "category": "Stability",
+    "severity": { "label": "High", "base_score": 85 },
+    "confidence": 0.92,
+    "confidence_decay": 0.88,
+    "blocking": true,
+    "auto_fix": {
+      "allowed": false,
+      "risk": "High",
+      "probability_safe": 0.0
+    },
+    "rollback": { "recommended": true },
+    "ast_signature": ["AST node drop > threshold"],
+    "adaptive_scoring": {
+      "contextual_sensitivity": true,
+      "functionality_loss_risk": true
+    }
+  }
+}
