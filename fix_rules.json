@@ -1,0 +1,47 @@
+{
+    "ERR_MISSING_COLON": {
+        "description": "Missing colon (:) at the end of a header statement (if, for, while, def, class).",
+        "action": "append_at_end",
+        "correction": ":"
+    },
+    "ERR_INDENTATION_EXPECTED": {
+        "description": "Expected an indented block after a statement.",
+        "action": "add_indent",
+        "correction": "    "
+    },
+    "ERR_MIXED_INDENTATION": {
+        "description": "Mixed tabs and spaces detected.",
+        "action": "replace_tabs",
+        "correction": "    "
+    },
+    "ERR_UNCLOSED_PAREN": {
+        "description": "Unclosed parenthesis, bracket, or brace.",
+        "action": "append_at_end",
+        "correction": ")"
+    },
+    "ERR_UNCLOSED_STRING": {
+        "description": "String literal is missing a closing quote.",
+        "action": "append_quote",
+        "correction": "autodetect"
+    },
+    "ERR_ASSIGN_INSTEAD_OF_EQUAL": {
+        "description": "Used '=' instead of '==' in a comparison.",
+        "action": "replace_operator",
+        "correction": "=="
+    },
+    "ERR_PRINT_MISSING_PARENS": {
+        "description": "Python 3 requires parentheses for print statements.",
+        "action": "wrap_content",
+        "correction": "print()"
+    },
+    "ERR_UNUSED_IMPORT": {
+        "description": "Module imported but never used.",
+        "action": "comment_line",
+        "correction": "# "
+    },
+    "ERR_UNDEFINED_VARIABLE": {
+        "description": "Variable used before assignment.",
+        "action": "suggest_name",
+        "correction": "levenshtein_match"
+    }
+}
