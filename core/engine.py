@@ -1,6 +1,9 @@
 from core.repo_loader import RepoLoader
 from core.analyzer import Analyzer
+from fixer.fix_agent import FixAgent
+from validator.validator import ValidationResult
 
+import sys
 class DebuggerEngine:
     """
     Integration Engine
@@ -8,6 +11,15 @@ class DebuggerEngine:
     - Runs Analyzer on each file
     - Aggregates all issues
     """
+
+    SEVERITY_MAP = {
+        "SyntaxError": "HIGH",
+        "IndentationError": "HIGH",
+        "UndefinedVariable": "HIGH",
+        "UnusedVariable": "LOW",
+        "DuplicateAssignment": "MEDIUM",
+        "UnreachableCode": "MEDIUM",
+    }
 
     def __init__(self, repo_path="."):
         self.repo_path = repo_path
@@ -27,6 +39,9 @@ class DebuggerEngine:
 
                 for issue in issues:
                     issue["file"] = file_path
+                    issue["severity"] = self.SEVERITY_MAP.get(
+                        issue.get("type"), "LOW"
+                    )
 
                 all_issues.extend(issues)
 
@@ -34,8 +49,29 @@ class DebuggerEngine:
                 all_issues.append({
                     "type": "EngineError",
                     "file": file_path,
-                    "message": str(e)
+                    "message": str(e),
+                    "severity": "HIGH"
                 })
 
         return all_issues
+
+
+if __name__ == "__main__":
+    # default path
+    repo_path = "."
+
+    # if path is provided from terminal
+    if len(sys.argv) > 1:
+        repo_path = sys.argv[1]
+
+    engine = DebuggerEngine(repo_path)
+    issues = engine.run()
+
+    print("=== DEBUGGER RESULTS ===")
+    for issue in issues:
+        print(f"\n[{issue['severity']}] {issue['type']}")
+        print(f"File: {issue['file']}")
+        print(f"Line: {issue.get('line', '-')}")
+        print(f"Message: {issue['message']}")
+
 
