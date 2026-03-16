@@ -1,9 +1,6 @@
 import React, { useState } from 'react'
-import { motion as Motion, AnimatePresence } from 'framer-motion'
-import { Zap, User, Lock, ArrowRight, UserPlus, LogIn } from 'lucide-react'
-import { fetchJson } from './lib/api'
-
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+import { motion as Motion } from 'framer-motion'
+import { Zap, User, Lock, ArrowRight } from 'lucide-react'
 
 export default function LoginPage({ onLogin }) {
     const [isRegister, setIsRegister] = useState(false)
@@ -12,57 +9,26 @@ export default function LoginPage({ onLogin }) {
     const [displayName, setDisplayName] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
-    const [shake, setShake] = useState(false)
-
-    const triggerShake = () => {
-        setShake(true)
-        setTimeout(() => setShake(false), 500)
-    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
-
-        // Client-side validation
-        if (isRegister) {
-            if (username.length < 3) {
-                setError('Username must be at least 3 characters.')
-                triggerShake()
-                return
-            }
-            if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-                setError('Username can only contain letters, numbers, and underscores.')
-                triggerShake()
-                return
-            }
-            if (password.length < 6) {
-                setError('Password must be at least 6 characters.')
-                triggerShake()
-                return
-            }
-        }
-
         setLoading(true)
 
         try {
-            const endpoint = isRegister ? '/auth/register' : '/auth/login'
-            const body = isRegister
-                ? { username, password, display_name: displayName || username }
-                : { username, password }
+            if (!username.trim() || !password.trim()) {
+                throw new Error('Please enter both username and password.')
+            }
 
-            const data = await fetchJson(`${API}${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            })
+            // Mock success for demo
+            const mockUser = {
+                username: username.trim(),
+                display_name: isRegister ? (displayName || username.trim()) : username.trim()
+            }
 
-            localStorage.setItem('auth_token', data.access_token)
-            localStorage.setItem('auth_user', JSON.stringify(data.user))
-            onLogin(data.user)
+            onLogin(mockUser)
         } catch (err) {
-            setError(err.message || 'Authentication failed.')
-            triggerShake()
-        } finally {
+            setError(err.message)
             setLoading(false)
         }
     }
@@ -133,9 +99,9 @@ export default function LoginPage({ onLogin }) {
                         />
                     </div>
 
-                    {error && <div className="login-error">{error}</div>}
+                    {error && <div className="login-error" style={{ color: '#f87171', fontSize: '0.875rem', marginTop: '0.5rem', textAlign: 'center' }}>{error}</div>}
 
-                    <button type="submit" className="login-submit" disabled={loading}>
+                    <button type="submit" className="login-submit" disabled={loading} style={{ marginTop: '1.5rem' }}>
                         {loading ? 'Authenticating...' : (isRegister ? 'Create Profile' : 'Access Terminal')}
                         {!loading && <ArrowRight size={18} />}
                     </button>

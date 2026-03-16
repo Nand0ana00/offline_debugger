@@ -173,6 +173,12 @@ def _is_auth_exempt(path: str) -> bool:
 
 
 def _extract_bearer_token(request: Request) -> str | None:
+    # 1. Try Cookie (Preferred for Desktop App)
+    token = request.cookies.get("auth_token")
+    if token:
+        return token
+    
+    # 2. Try Authorization Header (Fallback)
     auth_header = request.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
         return auth_header[7:].strip()
@@ -936,31 +942,30 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
-@app.post("/auth/login", response_model=TokenResponse)
-def login(request: LoginRequest):
-    user = authenticate_user(request.username, request.password)
+@app.post("/auth/register", response_model=TokenResponse, tags=["Auth"])
+async def handle_register(data: RegisterRequest):
+    user = register_user(data.username, data.password, data.display_name)
+    if not user:
+        raise HTTPException(status_code=400, detail="Username already exists.")
+    
+    token = create_access_token(data.username)
+    response = JSONResponse(content={"access_token": token, "token_type": "bearer", "user": user})
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        httponly=True,
+        max_age=86400,
+        samesite="lax",
+        secure=False,  # Local dev/desktop app
+    )
+    return response
+
+
+@app.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
+async def handle_login(data: LoginRequest):
+    user = authenticate_user(data.username, data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
-    token = create_access_token(user["username"])
-    return TokenResponse(access_token=token, user=user)
-
-
-@app.post("/auth/register", response_model=TokenResponse)
-def register(request: RegisterRequest):
-    user = register_user(request.username, request.password, request.display_name)
-    if not user:
-        raise HTTPException(status_code=409, detail="Username already exists.")
-    token = create_access_token(user["username"])
-    return TokenResponse(access_token=token, user=user)
-
-
-@app.post("/auth/logout")
-async def logout(request: Request):
-    """
-    Optional backend-side session invalidation.
-    For this implementation, we simply return success as the frontend
-    will clear the local storage tokens.
-    """
     return {"message": "Logged out successfully"}
 
 

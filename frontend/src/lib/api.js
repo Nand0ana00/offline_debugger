@@ -1,17 +1,8 @@
-const AUTH_TOKEN_KEY = 'auth_token'
-
-function _getAuthHeaders() {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY)
-  if (token) {
-    return { Authorization: `Bearer ${token}` }
-  }
-  return {}
-}
+// Note: In same-origin environments or when credentials are included, 
+// browser/webview handles cookies automatically.
 
 function _handle401(response) {
   if (response.status === 401) {
-    localStorage.removeItem(AUTH_TOKEN_KEY)
-    localStorage.removeItem('auth_user')
     window.dispatchEvent(new Event('auth_expired'))
   }
 }
@@ -31,8 +22,8 @@ function _formatErrorMessage(detail) {
 }
 
 export async function fetchJson(url, options = {}) {
-  const headers = { ..._getAuthHeaders(), ...(options.headers || {}) }
-  const response = await fetch(url, { ...options, headers })
+  const headers = { ...(options.headers || {}) }
+  const response = await fetch(url, { ...options, headers, credentials: 'include' })
   let payload = {}
   try {
     payload = await response.json()
@@ -52,8 +43,8 @@ export async function fetchJson(url, options = {}) {
 
 export async function fetchJsonWithMeta(url, options = {}) {
   const start = performance.now()
-  const headers = { ..._getAuthHeaders(), ...(options.headers || {}) }
-  const response = await fetch(url, { ...options, headers })
+  const headers = { ...(options.headers || {}) }
+  const response = await fetch(url, { ...options, headers, credentials: 'include' })
   let payload = {}
   try {
     payload = await response.json()

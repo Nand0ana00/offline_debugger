@@ -656,24 +656,8 @@ function MetricsPanel({ metrics, loading, error, onRefresh }) {
 }
 
 function App() {
-  const [authUser, setAuthUser] = useState(() => {
-    try {
-      const token = localStorage.getItem('auth_token')
-      const user = localStorage.getItem('auth_user')
-      if (token && user) return JSON.parse(user)
-      return null
-    } catch { return null }
-  })
-
-  useEffect(() => {
-    const handleExpired = () => {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('auth_user')
-      setAuthUser(null)
-    }
-    window.addEventListener('auth_expired', handleExpired)
-    return () => window.removeEventListener('auth_expired', handleExpired)
-  }, [])
+  const [authUser, setAuthUser] = useState(null)
+  const [authChecking, setAuthChecking] = useState(false)
 
   const handleLogin = (user) => setAuthUser(user)
 
@@ -683,9 +667,18 @@ function App() {
     } catch (e) {
       console.error("Backend logout failed", e)
     }
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
     setAuthUser(null)
+  }
+
+  if (authChecking) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-secondary)' }}>
+          <RefreshCcw size={24} className="spin" />
+          <span>Restoring session...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -737,16 +730,7 @@ function MainApp({ authUser, onLogout }) {
   const [health, setHealth] = useState({ online: false, model_loaded: false })
   const [apiLatencyMs, setApiLatencyMs] = useState(null)
   const [status, setStatus] = useState('')
-  const [history, setHistory] = useState(() => {
-    try {
-      const raw = localStorage.getItem(HISTORY_STORAGE_KEY)
-      if (!raw) return []
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  })
+  const [history, setHistory] = useState([])
   const [workspaceFiles, setWorkspaceFiles] = useState([])
   const [workspaceCount, setWorkspaceCount] = useState(0)
   const [workspaceQuery, setWorkspaceQuery] = useState('')
@@ -755,14 +739,7 @@ function MainApp({ authUser, onLogout }) {
   const [batchSummary, setBatchSummary] = useState(null)
   const [workspaceRoot, setWorkspaceRoot] = useState('')
   const [projectUploadLoading, setProjectUploadLoading] = useState(false)
-  const [debugMode, setDebugMode] = useState(() => {
-    try {
-      const saved = localStorage.getItem(MODE_STORAGE_KEY)
-      return saved === 'fast' ? 'fast' : 'full'
-    } catch {
-      return 'full'
-    }
-  })
+  const [debugMode, setDebugMode] = useState('full')
   const [preflightError, setPreflightError] = useState(null)
   const [fixValidation, setFixValidation] = useState(null)
   const [validatingFix, setValidatingFix] = useState(false)
@@ -839,19 +816,11 @@ function MainApp({ authUser, onLogout }) {
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem(MODE_STORAGE_KEY, debugMode)
-    } catch {
-      // no-op for restricted browser contexts
-    }
+    // History persistence removed from client-side
   }, [debugMode])
 
   useEffect(() => {
-    try {
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 10)))
-    } catch {
-      // no-op for restricted browser contexts
-    }
+    // Mode persistence removed from client-side
   }, [history])
 
   useEffect(() => {
@@ -871,15 +840,12 @@ function MainApp({ authUser, onLogout }) {
       setHealth({ ...data, online: data.status === 'online' })
       setApiLatencyMs(durationMs)
       if (!modeInitializedRef.current) {
-        const hasSavedMode = (() => {
-          try {
-            return Boolean(localStorage.getItem(MODE_STORAGE_KEY))
-          } catch {
-            return false
-          }
-        })()
+        const hasSavedMode = false;
         if (!hasSavedMode) {
-          setDebugMode(data.fast_mode_default ? 'fast' : 'full')
+          try {
+            const res = await fetchJson(`${API}/health`)
+            if (res.fast_mode_default) setDebugMode('fast')
+          } catch { }
         }
         modeInitializedRef.current = true
       }

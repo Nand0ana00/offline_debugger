@@ -12,7 +12,7 @@ from pathlib import Path
 import uvicorn
 
 # Pre-configure environment for desktop mode
-os.environ["OFFLINE_DEBUGGER_AUTH_DISABLED"] = "0"
+os.environ["OFFLINE_DEBUGGER_AUTH_DISABLED"] = "1"
 
 from app import app
 
