@@ -11,6 +11,9 @@ from pathlib import Path
 
 import uvicorn
 
+# Pre-configure environment for desktop mode
+os.environ["OFFLINE_DEBUGGER_AUTH_DISABLED"] = "0"
+
 from app import app
 
 try:

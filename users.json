@@ -22,5 +22,11 @@
     "display_name": "Sree",
     "hashed_password": "$2b$12$bqZhFmKs1R1f6Wk/nfIYze6AOvE7aregcKznUg2vwcrFwDfAAeHAC",
     "created_at": 1772731533.233253
+  },
+  "nandanavinu000_": {
+    "username": "nandanavinu000_",
+    "display_name": "Nandana Vinu",
+    "hashed_password": "$2b$12$XrJjz9.uXwf5AJhHoBIqHOd/7xkovng.DCNLdTVDwqWOGq8Isc6a6",
+    "created_at": 1773278785.7536175
   }
 }

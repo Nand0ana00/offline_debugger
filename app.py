@@ -24,9 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-
-from agents import DebuggingAgents
+from backend.agents import DebuggingAgents
 from backend.caching import InMemoryRateLimiter, TimedResponseCache, TimedValueCache
 # --- App Infrastructure ---
 
@@ -35,6 +33,7 @@ from backend.config import (
     ANALYSIS_CACHE_TTL_SECONDS,
     CACHE_MAX_ENTRIES,
     CACHE_TTL_SECONDS,
+    AUTH_DISABLED,
     ENABLE_SECURITY_AUDIT,
     EXEC_TIMEOUT_SECONDS,
     FAST_MODE_DEFAULT,
@@ -78,8 +77,8 @@ from backend.schemas import (
     TokenResponse,
     ValidateFixRequest,
 )
-from rag_engine import LocalRAGEngine
-from Scanner import CodeScanner
+from backend.rag_engine import LocalRAGEngine
+from backend.scanner import CodeScanner
 
 ensure_runtime_paths()
 
@@ -87,10 +86,11 @@ ensure_runtime_paths()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info(
-        "startup workspace_root=%s upload_dir=%s model_path=%s rate_limit_per_minute=%s pipeline_concurrency=%s",
+        "startup workspace_root=%s upload_dir=%s model_path=%s auth_disabled=%s rate_limit_per_minute=%s pipeline_concurrency=%s",
         WORKSPACE_ROOT,
         UPLOAD_DIR,
         MODEL_PATH,
+        AUTH_DISABLED,
         RATE_LIMIT_PER_MINUTE,
         PIPELINE_CONCURRENCY,
     )
@@ -200,7 +200,7 @@ async def request_context_middleware(request: Request, call_next):
             _apply_common_response_headers(response, request_id, elapsed_ms, path)
             return response
 
-    if not _is_auth_exempt(path):
+    if not (AUTH_DISABLED or request.method == "OPTIONS" or _is_auth_exempt(path)):
         token = _extract_bearer_token(request)
         if not token:
             elapsed_ms = (time.perf_counter() - started) * 1000
@@ -237,7 +237,7 @@ async def request_context_middleware(request: Request, call_next):
     return response
 
 
-scanner = CodeScanner(str(WORKSPACE_ROOT), scan_cache_ttl_seconds=SCAN_CACHE_TTL_SECONDS)
+scanner = CodeScanner(str(WORKSPACE_ROOT))
 rag = LocalRAGEngine(data_dir="knowledge_base")
 agents = DebuggingAgents(model_path=MODEL_PATH)
 executor = ThreadPoolExecutor(max_workers=THREAD_POOL_WORKERS)
@@ -256,7 +256,7 @@ def _safe_resolve_workspace_path(
     must_exist: bool,
     enforce_python: bool = True,
 ) -> Path:
-    candidate_raw = raw_path.strip()
+    candidate_raw = raw_path.strip().replace("\\", "/")
     if not candidate_raw:
         raise HTTPException(status_code=400, detail="file_path is required.")
 
@@ -401,7 +401,7 @@ def _activate_workspace_root(root_path: Path) -> None:
     WORKSPACE_ROOT = root_path
     UPLOAD_DIR = _workspace_upload_dir(root_path)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    scanner = CodeScanner(str(root_path), scan_cache_ttl_seconds=SCAN_CACHE_TTL_SECONDS)
+    scanner = CodeScanner(str(WORKSPACE_ROOT))
     _invalidate_workspace_caches()
 
 
@@ -954,6 +954,16 @@ def register(request: RegisterRequest):
     return TokenResponse(access_token=token, user=user)
 
 
+@app.post("/auth/logout")
+async def logout(request: Request):
+    """
+    Optional backend-side session invalidation.
+    For this implementation, we simply return success as the frontend
+    will clear the local storage tokens.
+    """
+    return {"message": "Logged out successfully"}
+
+
 @app.get("/auth/me")
 def auth_me(request: Request):
     token = _extract_bearer_token(request)
@@ -1146,24 +1156,26 @@ async def browse_workspace_root():
             )
 
         # Fallback to internal PowerShell picker for Windows
-        if sys.platform == "win32":
-            selected_path = await run_in_executor(
-                _open_native_folder_picker,
-                "Select Project Workspace Folder",
-                WORKSPACE_ROOT,
-            )
-            if selected_path:
-                return {"path": str(Path(selected_path).resolve())}
-            # If no path was selected (user cancelled or timeout), trigger upload fallback
+        # (Allows calling the picker function regardless of platform to support mocking in tests)
+        selected_path = await run_in_executor(
+            _open_native_folder_picker,
+            "Select Project Workspace Folder",
+            WORKSPACE_ROOT,
+        )
+        if selected_path:
+            return {"path": str(Path(selected_path).resolve())}
+        
+        # If we reach here and it's not Windows, we can't open the native dialog
+        if sys.platform != "win32":
             raise HTTPException(
                 status_code=400, 
-                detail="Could not open native folder picker: User cancelled or dialog unavailable"
+                detail="Native folder picker only available in Desktop App mode or on Windows."
             )
-            
-        # Fallback (non-desktop mode, non-windows): cannot open native dialogs in generic browser
+
+        # If no path was selected (user cancelled or timeout) on Windows
         raise HTTPException(
             status_code=400, 
-            detail="Native folder picker only available in Desktop App mode or on Windows."
+            detail="Could not open native folder picker: User cancelled or dialog unavailable"
         )
     except Exception as exc:
         logger.error(f"Failed to open folder picker: {exc}")

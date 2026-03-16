@@ -672,7 +672,12 @@ function App() {
 
   const handleLogin = (user) => setAuthUser(user)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetchJson(`${API}/auth/logout`, { method: 'POST' })
+    } catch (e) {
+      console.error("Backend logout failed", e)
+    }
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
     setAuthUser(null)
@@ -1334,7 +1339,6 @@ function MainApp({ authUser, onLogout }) {
 
   return (
     <div className="app-layout">
-      {/* Command Palette Overlay */}
       <AnimatePresence>
         {showCommandPalette && (
           <Motion.div
@@ -1358,7 +1362,7 @@ function MainApp({ authUser, onLogout }) {
               initial={{ opacity: 0, scale: 0.95, y: -20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -20 }}
-              className="card glass"
+              className="card"
               style={{ width: '90%', maxWidth: '600px', padding: '1.5rem' }}
               onClick={e => e.stopPropagation()}
             >
@@ -1369,7 +1373,7 @@ function MainApp({ authUser, onLogout }) {
               <input
                 autoFocus
                 className="input-field"
-                placeholder="Search workspace files or commands..."
+                placeholder="Search workspace files..."
                 value={paletteQuery}
                 onChange={e => setPaletteQuery(e.target.value)}
                 style={{ padding: '1rem', fontSize: '1.1rem' }}
@@ -1380,7 +1384,7 @@ function MainApp({ authUser, onLogout }) {
                     <div
                       key={file.path}
                       className="btn btn-secondary"
-                      style={{ justifyContent: 'flex-start', padding: '0.75rem 1rem' }}
+                      style={{ justifyContent: 'flex-start', padding: '0.75rem 1rem', width: '100%' }}
                       onClick={() => {
                         setFilePath(file.path);
                         setMode('upload');
@@ -1391,319 +1395,169 @@ function MainApp({ authUser, onLogout }) {
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                         <span style={{ fontWeight: 600 }}>{file.name}</span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>{file.rel_path}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{file.rel_path}</span>
                       </div>
                     </div>
                   ))}
-                  {filteredPaletteFiles.length === 0 && (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                      No files found.
-                    </div>
-                  )}
                 </div>
               )}
             </Motion.div>
           </Motion.div>
         )}
       </AnimatePresence>
-      {/* Sidebar */}
+
       <aside className="sidebar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '3.5rem' }}>
-          <div style={{
-            background: 'var(--elite-gradient)',
-            borderRadius: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '44px',
-            height: '44px',
-            boxShadow: '0 8px 24px -6px rgba(168, 85, 247, 0.5)'
-          }}>
+        <a href="/" className="sidebar-logo">
+          <div className="sidebar-logo-icon">
             <Zap size={24} color="white" fill="white" />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.02em', lineHeight: 1 }}>OFFLINE</span>
-            <span style={{ fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.02em', color: 'var(--accent)', lineHeight: 1 }}>AI DEBUGGER</span>
+          <div className="sidebar-logo-text">
+            <span className="sidebar-brand-top">OFFLINE</span>
+            <span className="sidebar-brand-bottom">AI DEBUGGER</span>
+          </div>
+        </a>
+
+        <div className="sidebar-nav">
+          <div className="nav-section">
+            <h3 className="nav-section-title">Session History</h3>
+            <div className="history-list">
+              {history.map((item) => (
+                <div
+                  key={item.id}
+                  className="history-item"
+                  onClick={() => {
+                    if (item.full_content) {
+                      setPasteCode(item.full_content);
+                      setMode('paste');
+                    } else if (item.id_path) {
+                      setFilePath(item.id_path);
+                      setMode('upload');
+                    }
+                    setActiveTab('debug');
+                  }}
+                >
+                  <div className="history-icon" />
+                  <div className="history-content">
+                    <span className="history-label">{item.file}</span>
+                    <span className="history-time">{item.timestamp}</span>
+                  </div>
+                </div>
+              ))}
+              {history.length === 0 && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No history yet</span>
+              )}
+            </div>
           </div>
         </div>
 
-        <nav style={{ flex: 1 }}>
-          <div style={{ color: 'var(--text-tertiary)', fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: '1.5rem' }}>Session History</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {history.map((item) => (
-              <Motion.div
-                layout
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                key={item.id}
-                className="btn btn-secondary"
-                style={{ justifyContent: 'flex-start', fontSize: '0.8rem', padding: '0.75rem 1rem', width: '100%', border: '1px solid transparent' }}
-                onClick={() => {
-                  if (item.file !== '<snippet>') {
-                    setFilePath(item.id_path || item.file);
-                    setMode(item.file.startsWith('/') || item.file.includes('.') ? 'upload' : 'paste');
-                    if (item.file.startsWith('/') || item.file.includes('.')) {
-                      runDebug(item.id_path || item.file);
-                    } else {
-                      setPasteCode(item.full_content || '');
-                      runDebug(null);
-                    }
-                  }
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {item.status === 'clean' ? <CheckCircle2 size={12} color="var(--success)" /> : <AlertCircle size={12} color="var(--error)" />}
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{item.file}</span>
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', opacity: 0.7 }}>{item.timestamp}</span>
-                </div>
-              </Motion.div>
-            ))}
-            {history.length === 0 && <div size={12} />}
-          </div>
-        </nav>
-
-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="card glass" style={{ padding: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', color: health.online ? 'var(--success)' : 'var(--error)', fontWeight: 800 }}>
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: health.online ? 'var(--success)' : 'var(--error)',
-                boxShadow: `0 0 12px ${health.online ? 'var(--success)' : 'var(--error)'}`,
-                animation: health.online ? 'pulse 2s infinite' : 'none'
-              }} />
-              {health.online ? 'Backend Online' : 'Backend Offline'}
+        <div className="sidebar-footer">
+          <div className="status-box">
+            <div className="status-row">
+              <div className="status-label-group">
+                <div className="status-dot" />
+                <span className="status-label">Backend Online</span>
+              </div>
             </div>
-            <div style={{ marginTop: '0.55rem', fontSize: '0.72rem', color: 'var(--text-tertiary)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Model</span>
-              <span style={{ color: health.model_loaded ? 'var(--success)' : 'var(--warning)' }}>
-                {health.model_loaded ? 'Loaded' : 'Disabled'}
-              </span>
+            <div className="status-row">
+              <span className="status-label">Model</span>
+              <span className="status-value">{health.model_loaded ? 'Loaded' : 'Stopped'}</span>
             </div>
-            <div style={{ marginTop: '0.25rem', fontSize: '0.72rem', color: 'var(--text-tertiary)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>API Latency</span>
-              <span>{apiLatencyMs == null ? 'N/A' : `${apiLatencyMs} ms`}</span>
+            <div className="status-row">
+              <span className="status-label">API Latency</span>
+              <span className="status-value">{apiLatencyMs ? `${apiLatencyMs}ms` : 'N/A'}</span>
             </div>
           </div>
-          <button
-            className="btn btn-secondary"
-            style={{ fontSize: '0.78rem', gap: '0.5rem', padding: '0.6rem 1rem', width: '100%', justifyContent: 'center', marginTop: '0.75rem' }}
-            onClick={onLogout}
-          >
-            <LogOut size={14} /> Sign Out
+          <button className="btn-signout" onClick={onLogout}>
+            <LogOut size={16} /> Sign Out
           </button>
         </div>
-      </aside >
+      </aside>
 
-      {/* Main Content */}
-      < main className="main-content" >
+      <main className="main-content">
         <div className="main-scroll-area">
-          <header>
-            <Motion.h1 initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: '2rem' }}>Offline AI-Powered Code Debugger - V2</Motion.h1>
-            <Motion.p initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <header className="view-header">
+            <div className="system-status">
+              <div className="status-dot" /> System Stable
+            </div>
+            <h1 className="view-title">Offline AI-Powered Code Debugger</h1>
+            <p className="view-subtitle">
               using RAG and Multi-Agent Architecture for automation, validation, and security insights.
-            </Motion.p>
+            </p>
           </header>
 
-          <div className="tabs-container">
-            <button className={`tab-btn ${activeTab === 'debug' ? 'active' : ''}`} onClick={() => setActiveTab('debug')}>Debug</button>
-            <button className={`tab-btn ${activeTab === 'workspace' ? 'active' : ''}`} onClick={() => setActiveTab('workspace')}>Workspace</button>
-            <button className={`tab-btn ${activeTab === 'insights' ? 'active' : ''}`} onClick={() => setActiveTab('insights')}>Insights</button>
-            <button className={`tab-btn ${activeTab === 'security' ? 'active' : ''}`} onClick={() => setActiveTab('security')}>Security</button>
-            <button className={`tab-btn ${activeTab === 'metrics' ? 'active' : ''}`} onClick={() => setActiveTab('metrics')}>Metrics</button>
-            <button className={`tab-btn ${activeTab === 'terminal' ? 'active' : ''}`} onClick={() => setActiveTab('terminal')}>Execution Log</button>
-          </div>
+          <nav className="nav-tabs">
+            {['Debug', 'Workspace', 'Collaboration', 'O Visualizer', 'Profiler', 'Sessions', 'Insights', 'Metrics', 'Execution Log'].map(tab => (
+              <div
+                key={tab}
+                className={`nav-tab ${activeTab.toLowerCase() === tab.toLowerCase().split(' ')[0] ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.toLowerCase().split(' ')[0])}
+              >
+                {tab}
+              </div>
+            ))}
+          </nav>
 
-          <div className="grid" style={{ gridTemplateColumns: '1fr 320px', alignItems: 'start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <div className="dashboard-grid">
+            <div className="main-panel">
               <AnimatePresence mode="wait">
                 {activeTab === 'debug' && (
                   <Motion.div key="debug-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-                    <div className="card">
-                      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-                        <button className={`btn ${mode === 'paste' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('paste')}>
-                          <Clipboard size={18} /> Paste Fragment
-                        </button>
-                        <button className={`btn ${mode === 'upload' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('upload')}>
-                          <Upload size={18} /> Load File
-                        </button>
-                      </div>
-
-                      <div className="mode-toolbar">
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
-                          Pipeline Mode
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button className={`mode-chip ${debugMode === 'fast' ? 'active' : ''}`} onClick={() => setDebugMode('fast')} type="button">
-                            Fast
-                          </button>
-                          <button className={`mode-chip ${debugMode === 'full' ? 'active' : ''}`} onClick={() => setDebugMode('full')} type="button">
-                            Full
-                          </button>
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                          {debugMode === 'fast'
-                            ? 'Fast mode prioritizes latency by skipping deep orchestration and heavy security scan.'
-                            : 'Full mode runs full orchestration and complete security audit.'}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
-                          Shortcut: Ctrl/Cmd + Enter to run debug.
+                    <div className="debug-card">
+                      <div className="card-header">
+                        <div className="mode-toggle">
+                          <button className={`mode-btn ${mode === 'paste' ? 'active' : ''}`} onClick={() => setMode('paste')}>Snippet</button>
+                          <button className={`mode-btn ${mode === 'upload' ? 'active' : ''}`} onClick={() => setMode('upload')}>File Mode</button>
                         </div>
                       </div>
 
-                      {mode === 'paste' ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                          <textarea
-                            className="input-field"
-                            value={pasteCode}
-                            onChange={e => setPasteCode(e.target.value)}
-                            placeholder="# Enter buggy Python logic..."
-                            style={{ minHeight: '280px', border: preflightError ? '1px solid var(--error)' : '1px solid var(--border)' }}
-                          />
-                          {preflightError && (
-                            <Motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} style={{ color: 'var(--error)', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                              <AlertCircle size={14} /> {preflightError}
-                            </Motion.div>
-                          )}
-                          <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => runDebug(null)} disabled={loading || !pasteCode.trim()}>
-                            {loading ? <div className="loader" /> : <Zap size={20} />}
-                            {loading ? LOADING_MESSAGES[loadingStep] : 'Run Debug Pipeline'}
-                          </button>
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            border: '2px dashed var(--border)',
-                            borderRadius: '1.5rem',
-                            padding: '4rem 2rem',
-                            textAlign: 'center',
-                            background: 'rgba(255,255,255,0.01)',
-                            transition: 'all 0.3s'
-                          }}
-                          onDragOver={(e) => { e.preventDefault(); e.target.style.borderColor = 'var(--accent)' }}
-                          onDragLeave={(e) => { e.preventDefault(); e.target.style.borderColor = 'var(--border)' }}
-                          onDrop={(e) => {
-                            e.preventDefault()
-                            const file = e.dataTransfer.files[0]
-                            if (file) handleUpload({ target: { files: [file] } })
-                          }}
-                        >
-                          <Upload size={48} color="var(--text-tertiary)" style={{ marginBottom: '1.5rem' }} />
-                          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Drop Python target into Quantum Field or</p>
-                          <label className="btn btn-secondary" style={{ display: 'inline-flex' }}>
-                            Initialize Uplink
-                            <input type="file" hidden onChange={handleUpload} accept=".py" />
-                          </label>
-                        </div>
-                      )}
+                      <div className="editor-wrapper">
+                        <textarea
+                          className="editor-textarea"
+                          value={mode === 'paste' ? pasteCode : filePath}
+                          onChange={(e) => mode === 'paste' ? setPasteCode(e.target.value) : setFilePath(e.target.value)}
+                          placeholder={mode === 'paste' ? "def divide_numbers(a, b):\n# Set a breakpoint on the line below to inspect 'a' and 'b'\nresult = a / b" : "Path/to/file.py"}
+                        />
+                        {loading && (
+                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px' }}>
+                            <RefreshCcw className="spin" size={32} color="var(--accent)" />
+                          </div>
+                        )}
+                      </div>
 
-                      {status && (
-                        <Motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="status-indicator"
-                          style={{
-                            marginTop: '1.5rem',
-                            color: successStatus ? 'var(--success)' : 'var(--error)',
-                            cursor: result && !result.success ? 'pointer' : 'default',
-                            padding: '0.75rem',
-                            borderRadius: '0.75rem',
-                            background: result && !result.success ? 'rgba(239, 68, 68, 0.05)' : 'transparent'
-                          }}
-                          onClick={() => {
-                            if (result && !result.success) {
-                              traceRef.current?.scrollIntoView({ behavior: 'smooth' })
-                            }
-                          }}
-                        >
-                          {successStatus ? <CheckCircle2 size={14} /> : <Info size={14} />}
-                          {status}
-                          {result && !result.success && <span style={{ fontSize: '0.7rem', opacity: 0.6, marginLeft: '0.5rem' }}>(CLICK TO JUMP)</span>}
-                        </Motion.div>
-                      )}
+                      <button className="btn-primary initialize-btn" onClick={() => runDebug(null)} disabled={loading}>
+                        <Zap size={20} fill="white" />
+                        {loading ? 'Initializing Pipeline...' : 'Initialize Pipeline'}
+                      </button>
                     </div>
 
-                    {result && !result.success && (
-                      <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                        <div className="card" ref={traceRef}>
-                          <h3 style={{ color: 'var(--error)', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.2rem', marginBottom: '1.5rem' }}>
-                            <Terminal size={20} /> Traceback Intercepted
-                          </h3>
-                          {severityInfo && (
-                            <div style={{ marginBottom: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.35rem 0.65rem', borderRadius: '999px', background: severityInfo.bg, color: severityInfo.color, fontSize: '0.72rem', fontWeight: 700 }}>
-                              {severityInfo.icon} {severityInfo.label}
-                            </div>
-                          )}
-                          <div style={{ borderRadius: '1rem', overflow: 'hidden', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border)' }}>
-                            <SyntaxHighlighter language="text" style={vscDarkPlus} showLineNumbers={true} customStyle={{ margin: 0, padding: '1.5rem', fontSize: '0.85rem', background: 'transparent' }}>
-                              {result.error}
-                            </SyntaxHighlighter>
-                          </div>
-                          {result.analysis && (
-                            <div style={{ marginTop: '2rem' }}>
-                              <h4 style={{ marginBottom: '1rem', fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 800, textTransform: 'uppercase' }}>VIPER AGENT ADVISORY</h4>
-                              <div style={{ padding: '1.25rem', background: 'rgba(168, 85, 247, 0.05)', borderRadius: '1rem', border: '1px solid rgba(168, 85, 247, 0.1)', lineHeight: 1.8, fontSize: '0.9rem' }}>
-                                {result.analysis}
-                              </div>
-                            </div>
-                          )}
+                    {result && (
+                      <div className="patch-card" style={{ marginTop: '2rem' }}>
+                        <div className="patch-status">
+                          <div className="status-dot" /> STABLE
                         </div>
-
-                        <div className="card" style={{ borderTop: '4px solid var(--success)', padding: '0' }}>
-                          <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <h3 style={{ color: 'var(--success)', fontSize: '1.2rem', marginBottom: '0.2rem' }}>Patch Workspace</h3>
-                              <p style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Review, validate, and apply generated patch changes</p>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <div className="patch-explanation">
+                          {result.analysis || "Analysis complete. Review the patches below."}
+                        </div>
+                        {result.fixed_code && (
+                          <div style={{ marginTop: '2rem' }}>
+                            <ViperEditor
+                              original={result.source_code || pasteCode || result.error || 'No context'}
+                              fixed={result.fixed_code}
+                              onEdit={(val) => {
+                                setResult({ ...result, fixed_code: val })
+                                setFixValidation(null)
+                              }}
+                            />
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: 'flex-end' }}>
                               <button className="btn btn-secondary btn-sm" onClick={handleShowDiff} disabled={!result?.fixed_code}>
-                                <Info size={14} /> {showDiff ? 'Hide Diff' : 'Show Diff'}
+                                <Info size={14} /> Diff
                               </button>
-                              <button className="btn btn-secondary btn-sm" onClick={handleCopy} disabled={!result?.fixed_code}>
-                                <Clipboard size={14} /> Copy
-                              </button>
-                              <button className="btn btn-secondary btn-sm" onClick={handleValidatePatch} disabled={!result?.fixed_code || validatingFix}>
-                                <ListChecks size={14} /> {validatingFix ? 'Validating...' : 'Validate Patch'}
-                              </button>
-                              <button
-                                className="btn btn-primary btn-sm"
-                                onClick={handleApplyFix}
-                                disabled={!result?.fixed_code || validatingFix || (fixValidation && !fixValidation.ready_to_apply)}
-                              >
-                                <Zap size={14} /> Commit Patch
+                              <button className="btn btn-primary btn-sm" onClick={handleApplyFix} disabled={!result.fixed_code}>
+                                <Zap size={14} /> Apply Fix
                               </button>
                             </div>
                           </div>
-
-                          <ViperEditor
-                            original={result.source_code || pasteCode || result.error || 'No context'}
-                            fixed={result.fixed_code}
-                            onEdit={(val) => {
-                              setResult({ ...result, fixed_code: val })
-                              setFixValidation(null)
-                            }}
-                          />
-
-                          {(fixValidation || validatingFix) && (
-                            <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--border)' }}>
-                              <FixValidationPanel validation={fixValidation} loading={validatingFix} />
-                            </div>
-                          )}
-
-                          {showDiff && (
-                            <div style={{ padding: '1.25rem', borderTop: '1px solid var(--border)' }}>
-                              <h4 style={{ marginBottom: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                Unified Diff
-                              </h4>
-                              <div style={{ border: '1px solid var(--border)', borderRadius: '0.75rem', overflow: 'hidden', maxHeight: '320px', overflowY: 'auto' }}>
-                                {(diff || '').split('\n').map((line, idx) => (
-                                  <DiffLine line={line} key={idx} />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
                     )}
                   </Motion.div>
@@ -1711,34 +1565,6 @@ function MainApp({ authUser, onLogout }) {
 
                 {activeTab === 'workspace' && (
                   <Motion.div key="workspace-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-                    <div className="card glass" style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                      <input
-                        className="input-field"
-                        style={{ minHeight: 'unset', padding: '0.75rem 1rem' }}
-                        value={workspaceQuery}
-                        onChange={(e) => setWorkspaceQuery(e.target.value)}
-                        placeholder="Filter files by name or path..."
-                      />
-                      <div style={{ minWidth: '120px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
-                        {filteredWorkspaceFiles.length} / {workspaceCount}
-                      </div>
-                    </div>
-                    {batchSummary && (
-                      <div className="card" style={{ marginBottom: '1rem', borderLeft: '3px solid var(--accent-secondary)' }}>
-                        <div style={{ fontSize: '0.82rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>Batch run complete</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>{batchSummary.duration_seconds}s</span>
-                        </div>
-                        <div style={{ marginTop: '0.55rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          Requested: {batchSummary.requested} | Success: {batchSummary.succeeded} | Failed: {batchSummary.failed}
-                        </div>
-                        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-                          <button className="btn btn-primary btn-sm" onClick={handleBatchApplyFixes}>
-                            <Zap size={14} /> Auto-Apply Fixes
-                          </button>
-                        </div>
-                      </div>
-                    )}
                     <WorkspacePanel
                       files={filteredWorkspaceFiles}
                       selectedPaths={selectedWorkspacePaths}
@@ -1767,23 +1593,6 @@ function MainApp({ authUser, onLogout }) {
                   </Motion.div>
                 )}
 
-                {activeTab === 'security' && (
-                  <Motion.div key="security-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-                    <div className="card">
-                      <h3>Security Audit</h3>
-                      <p style={{ color: 'var(--text-tertiary)', marginBottom: '2rem' }}>Static security findings from heuristics and Bandit (when available).</p>
-                      {result ? (
-                        <SecurityPanel data={result.security_audit} />
-                      ) : (
-                        <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-tertiary)' }}>
-                          <Shield size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-                          <p>Initialize a debug session to view security audit data.</p>
-                        </div>
-                      )}
-                    </div>
-                  </Motion.div>
-                )}
-
                 {activeTab === 'metrics' && (
                   <Motion.div key="metrics-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                     <MetricsPanel
@@ -1795,33 +1604,58 @@ function MainApp({ authUser, onLogout }) {
                   </Motion.div>
                 )}
 
-                {activeTab === 'terminal' && (
-                  <Motion.div key="terminal-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+                {activeTab === 'execution' && (
+                  <Motion.div key="execution-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                     <TerminalPanel result={result} loading={loading} />
                   </Motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* Right Sidebar stats */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'sticky', top: '0' }}>
-              <div className="card glass" style={{ padding: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                  <Zap size={18} color="var(--accent)" />
-                  <span style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Kernel Metrics</span>
+            <aside className="side-panels">
+              <div className="stats-card">
+                <h3 className="stats-title">Live Engine Stats</h3>
+                <div className="stats-group">
+                  <div className="stat-item">
+                    <div className="stat-label"><Shield size={12} /> Model Health</div>
+                    <div className="stat-value healthy">{health.model_loaded ? 'Optimal' : 'Offline'}</div>
+                  </div>
+                  <div className="stat-item">
+                    <div className="stat-label"><Clock3 size={12} /> Latency</div>
+                    <div className="stat-value">{apiLatencyMs ? `${apiLatencyMs}ms` : 'N/A'}</div>
+                  </div>
+                  <div className="stat-item">
+                    <div className="stat-label"><Activity size={12} /> Pipeline</div>
+                    <div className="stat-value full">{debugMode.toUpperCase()}</div>
+                  </div>
                 </div>
-                <StatCard label="Pipeline State" value={health.model_loaded ? 'Optimal' : 'Cold Start'} icon={Shield} color={health.model_loaded ? 'var(--success)' : 'var(--warning)'} />
-                <StatCard label="Active Mode" value={debugMode === 'fast' ? 'Fast' : 'Full'} icon={Zap} color={debugMode === 'fast' ? 'var(--warning)' : 'var(--accent)'} />
-                {insights && <StatCard label="Workspace Files" value={insights.total_files} icon={Layout} color="var(--accent-secondary)" />}
-                {result && result.total_time && <StatCard label="Latent Response" value={`${result.total_time}s`} icon={Activity} color="var(--accent)" />}
               </div>
-              <ComplexityPanel data={result?.complexity} />
-              <ViperAnalytics result={result} />
-            </div>
+
+              <div className="stats-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 className="stats-title" style={{ margin: 0 }}>Component Analysis</h3>
+                  {result?.complexity?.grade && (
+                    <span className={`grade-badge grade-${result.complexity.grade}`}>Grade {result.complexity.grade}</span>
+                  )}
+                </div>
+                {result?.complexity && (
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Complexity</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{result.complexity.cyclomatic_complexity}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Maintainability</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{result.complexity.maintainability_index}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </aside>
           </div>
         </div>
-      </main >
-    </div >
+      </main>
+    </div>
   )
 }
 

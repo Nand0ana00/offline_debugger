@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -9,6 +10,8 @@ import tempfile
 import threading
 import time
 from typing import Any
+
+logger = logging.getLogger("offline_debugger")
 
 try:
     from llama_cpp import Llama
@@ -193,23 +196,25 @@ Local Knowledge: {knowledge}
         if attempt > 1:
             retry_tip = (
                 "\n[CRITIC FEEDBACK] Previous fix failed validation."
-                " Simplify logic and avoid security risks."
+                " Simplify logic, ensure all variables are defined, and return ONLY the code."
             )
 
+        # Stricter prompt for the 1.5B model
         prompt = f"""<|im_start|>system
-You are an expert Python developer. Fix the bug with minimal, safe edits.
-1. Identify the crashing line.
-2. Apply the smallest valid correction.
-3. Keep behavior intact unless required for safety.{retry_tip}
-Return ONLY corrected code inside a ```python block.<|im_end|>
+You are a precision-focused Python bug fixer.
+Rules:
+1. Fix ONLY the reported error.
+2. Return ONLY the functional code. 
+3. No commentary, no explanations.
+4. Surround the code with ```python and ``` blocks.{retry_tip}<|im_end|>
 <|im_start|>user
-Buggy Code:
+Context:
 {context}
 
 Error:
 {error}
 
-Fixed Code:<|im_end|>
+Fix the error and return the full script:<|im_end|>
 <|im_start|>assistant
 ```python"""
 
@@ -217,17 +222,28 @@ Fixed Code:<|im_end|>
             with self._lock:
                 output = self.llm(
                     prompt,
-                    max_tokens=1024,
-                    temperature=0.01 if attempt == 1 else 0.4,
+                    max_tokens=1536,
+                    temperature=0.1 if attempt == 1 else 0.5, # Slightly more creative on retry
                     stop=["<|im_end|>", "```"],
                     echo=False,
                 )
             fixed = output["choices"][0]["text"].strip()
-        except Exception:
+            
+            # Aggressive triple-backtick cleanup
+            if "```python" in fixed:
+                fixed = fixed.split("```python")[1].split("```")[0].strip()
+            elif "```" in fixed:
+                fixed = fixed.split("```")[1].split("```")[0].strip()
+            
+            logger.info("Fixer Agent (attempt %d) produced fix: %s", attempt, fixed[:100] + "..." if len(fixed) > 100 else fixed)
+                
+        except Exception as exc:
+            logger.error(f"Fixer Agent error: {exc}")
             return self._heuristic_fallback_fix(context, error)
 
-        if len(fixed) < 10 or fixed.strip() == context.strip():
+        if not fixed or (len(fixed) < 3 and len(context) >= 3):
             return self._heuristic_fallback_fix(context, error)
+            
         return fixed
 
     def researcher_agent(self, error: str, context: str, workspace_files: list[dict[str, Any]]) -> list[str]:
@@ -262,14 +278,22 @@ Fixed Code:<|im_end|>
 
     def critic_agent(self, original_code: str, proposed_fix: str) -> dict[str, Any]:
         """Validate proposed fix for syntax, complexity, and security."""
-        try:
-            ast.parse(proposed_fix)
-        except SyntaxError:
-            return {"valid": False, "reason": "Syntax error in proposed fix."}
+        # Clean proposed_fix one last time before parsing
+        clean_fix = proposed_fix
+        if "```python" in clean_fix:
+            clean_fix = clean_fix.split("```python")[1].split("```")[0].strip()
+        elif "```" in clean_fix:
+            clean_fix = clean_fix.split("```")[1].split("```")[0].strip()
 
-        complexity = self.complexity_agent(proposed_fix)
+        try:
+            ast.parse(clean_fix)
+        except SyntaxError as e:
+            logger.warning("Critic Agent rejected fix due to SyntaxError: %s", e)
+            return {"valid": False, "reason": f"Syntax error in proposed fix: {e}"}
+
+        complexity = self.complexity_agent(clean_fix)
         orig_complexity = self.complexity_agent(original_code)
-        security = self.security_audit_agent(proposed_fix)
+        security = self.security_audit_agent(clean_fix)
         critical_vulnerabilities = [v for v in security.get("issues", []) if v.get("risk") == "CRITICAL"]
 
         if critical_vulnerabilities:
@@ -277,9 +301,13 @@ Fixed Code:<|im_end|>
                 "valid": False,
                 "reason": f"Fix introduced critical vulnerability: {critical_vulnerabilities[0]['type']}",
             }
-        if complexity["complexity_score"] > 25 and complexity["complexity_score"] > orig_complexity["complexity_score"]:
-            return {"valid": False, "reason": "Fix drastically increased code complexity (Cyclomatic > 25)."}
+            
+        # Refined complexity check - only reject if its truly massive and strictly worse
+        if complexity["complexity_score"] > 30 and complexity["complexity_score"] > (orig_complexity["complexity_score"] * 1.5):
+            logger.warning("Critic Agent rejected fix due to complexity: %d", complexity["complexity_score"])
+            return {"valid": False, "reason": f"Fix drastically increased code complexity ({complexity['complexity_score']})."}
 
+        logger.info("Critic Agent validated fix successfully.")
         return {"valid": True, "metrics": {"complexity": complexity, "security": security}}
 
     async def viper_orchestration(
@@ -306,6 +334,7 @@ Fixed Code:<|im_end|>
         best_fix = ""
         last_reason = None
         for attempt in range(1, 3):
+            logger.info("Viper Orchestration: Attempt %d/2", attempt)
             candidate = self.code_fixer_agent(augmented_context, error, attempt)
             report = self.critic_agent(context, candidate)
             if report["valid"]:

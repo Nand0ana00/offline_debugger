@@ -1,37 +1,68 @@
 import os
 import sys
+import asyncio
 import subprocess
+from pathlib import Path
 
-# Adding the 'src' directory to the system path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add the project root to the system path to find 'backend'
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
-from Scanner import CodeScanner
-from rag_engine import LocalRAGEngine
-from agents import DebuggingAgents
+# Import core components from backend
+from backend.scanner import CodeScanner
+from backend.rag_engine import LocalRAGEngine
+from backend.agents import DebuggingAgents
+from backend.config import MODEL_PATH, logger
 
-def run_target_code(file_path):
+def run_target_code(file_path: Path) -> str | None:
     """
-    DYNAMIC FEATURE: Runs the target file and captures the actual Traceback.
-    This makes the debugger 'live'.
+    Runs the target file and captures the actual error message.
     """
     try:
-        result = subprocess.run(['python3', file_path], capture_output=True, text=True, timeout=5)
+        # Use sys.executable to ensure we use the same Python environment
+        result = subprocess.run(
+            [sys.executable, str(file_path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=str(file_path.parent)
+        )
         if result.returncode == 0:
-            return None  # No error
-        # Get the last line of the error message
-        error_line = result.stderr.strip().splitlines()[-1]
-        return error_line
+            return None
+        
+        # Robustly extract error details from stderr
+        stderr = (result.stderr or result.stdout or "").strip()
+        if not stderr:
+            return f"RuntimeError: Process exited with code {result.returncode}"
+            
+        lines = stderr.splitlines()
+        # Find the last significant line (usually the exception type: message)
+        for line in reversed(lines):
+            if line.strip():
+                return line.strip()
+        return f"RuntimeError: {stderr[:100]}"
+    except subprocess.TimeoutExpired:
+        return "TimeoutError: Script execution timed out."
     except Exception as e:
-        return str(e)
+        return f"SystemError: {e}"
 
-def run_tech_voyagers(target_file):
-    print("\n" + "="*50)
-    print("🚀 TECHVOYAGERS: DYNAMIC OFFLINE DEBUGGER")
-    print("="*50)
+async def run_tech_voyagers(target_file_path: str):
+    """
+    High-level orchestration for the command-line debugging pipeline.
+    """
+    print("\n" + "="*60)
+    print("🚀 TECHVOYAGERS: DYNAMIC OFFLINE DEBUGGER (CLI v2.0)")
+    print("="*60)
+
+    target_path = Path(target_file_path).resolve()
+    if not target_path.exists():
+        print(f"❌ Error: File '{target_file_path}' not found.")
+        return
 
     # --- STEP 0: DYNAMIC ERROR DETECTION ---
-    print(f"📡 [STEP 0] Executing {target_file} to catch live errors...")
-    error_msg = run_target_code(target_file)
+    print(f"📡 [STEP 0] Executing {target_path.name} to catch live errors...")
+    error_msg = run_target_code(target_path)
     
     if not error_msg:
         print("✅ No errors detected! Your code is already working.")
@@ -40,11 +71,11 @@ def run_tech_voyagers(target_file):
     print(f"⚠️  Caught Error: {error_msg}")
 
     # --- STEP 1: SCANNER ---
-    print(f"🔍 [STEP 1] Scanning project for: {target_file}")
-    scanner = CodeScanner(".")
-    code_context = scanner.get_context_for_file(target_file)
-    if not code_context or "Error reading file" in code_context:
-        print("❌ Error: Could not read the target file.")
+    print(f"🔍 [STEP 1] Scanning project context...")
+    scanner = CodeScanner(str(PROJECT_ROOT))
+    code_context = scanner.get_context_for_file(str(target_path))
+    if "Error reading file" in code_context:
+        print(f"❌ {code_context}")
         return
 
     # --- STEP 2: RAG ENGINE ---
@@ -52,60 +83,73 @@ def run_tech_voyagers(target_file):
     rag = LocalRAGEngine(data_dir="knowledge_base")
     local_knowledge = rag.query_docs(error_msg)
 
-    # --- STEP 3: MULTI-AGENT AI ---
+    # --- STEP 3: MULTI-AGENT AI ORCHESTRATION ---
     print("🧠 [STEP 3] Initializing Offline AI Agents...")
-    agents = DebuggingAgents()
+    agents = DebuggingAgents(model_path=MODEL_PATH)
     
     if agents.llm is None:
-        print("❌ AI Error: Model file missing.")
+        print("❌ AI Error: Model file missing or runtime failed to load.")
         return
 
-    print("🤖 Analyzer is identifying the bug...")
-    analysis_results = agents.analyzer_agent(error_msg, code_context)
-
-    print("📖 Explainer is drafting educational guide...")
-    explanation_results = agents.explainer_agent(analysis_results, local_knowledge)
-
-    print("🛡️  Verifier is checking the solution...")
-    verification_results = agents.verifier_agent(explanation_results)
+    # Use the same consolidated pipeline as the Web API
+    print("🤖 Analyzing bug, explanation, and fix safety...")
+    pipeline_data = agents.multi_agent_pipeline(error_msg, code_context, local_knowledge)
 
     # --- FINAL REPORT OUTPUT ---
-    print("\n" + "-"*50)
+    print("\n" + "-"*60)
     print("🎯 FINAL DEBUGGING REPORT")
-    print("-" * 50)
-    print(f"🕵️  ANALYSIS:\n{analysis_results.strip()}")
-    print(f"\n💡 EXPLANATION:\n{explanation_results.strip()}")
-    print(f"\n✅ VERIFICATION:\n{verification_results.strip()}")
-    print("="*50 + "\n")
+    print("-" * 60)
+    print(f"🕵️  ANALYSIS: {pipeline_data.get('analysis', 'N/A')}")
+    print(f"\n💡 EXPLANATION: {pipeline_data.get('explanation', 'N/A')}")
+    print(f"\n✅ VERIFICATION: {pipeline_data.get('status', 'Verification unknown.')}")
+    print("="*60 + "\n")
 
-    # --- DYNAMIC AUTO-FIX FEATURE ---
-    choice = input("🚀 Would you like to generate the auto-fixed code file? (yes/no): ").strip().lower()
+    # --- DYNAMIC AUTO-FIX (VIPER ORCHESTRATION) ---
+    choice = input("�️  Would you like to generate an optimized fix using multi-agent research? (yes/no): ").strip().lower()
 
     if choice == 'yes':
-        print("🛠️  AI is rewriting your code dynamically...")
-        try:
-            # Using the code_fixer_agent we added to agents.py
-            fixed_code_raw = agents.code_fixer_agent(code_context, error_msg)
-            
-            # Clean any Markdown artifacts from the AI response
-            clean_code = fixed_code_raw.replace("```python", "").replace("```", "").strip()
-            
-            fixed_filename = f"fixed_{target_file}"
-            with open(fixed_filename, "w") as f:
-                f.write(clean_code)
+        print("\n� Entering Viper Orchestration Mode (Researching context + Self-Critique)...")
+        workspace_files = scanner.scan_workspace()
         
-            print(f"✅ Success! '{fixed_filename}' has been generated.")
-            print(f"📁 Run it with: python3 {fixed_filename}")
-        except Exception as e:
-            print(f"❌ Failed to generate fix: {e}")
+        # This triggered the full Research-Critic-Fix loop
+        orchestration_result = await agents.viper_orchestration(error_msg, code_context, workspace_files)
+        
+        if orchestration_result.get("success"):
+            fixed_code = orchestration_result["fix"]
+            print(f"✨ {orchestration_result['path_taken']}")
+            
+            # Clean Markdown artifacts
+            clean_code = fixed_code.replace("```python", "").replace("```", "").strip()
+
+            print("\n" + "-"*60)
+            print("📝 RECOMMENDED FIX:")
+            print("-"*60)
+            print(clean_code)
+            print("-"*60)
+
+            save_choice = input("\n💾 Save to file? (yes/no): ").strip().lower()
+            if save_choice == 'yes':
+                fixed_filename = f"fixed_{target_path.name}"
+                fixed_path = target_path.parent / fixed_filename
+                fixed_path.write_text(clean_code, encoding="utf-8")
+                print(f"✅ Saved to '{fixed_filename}'.")
+            else:
+                print("� Save skipped.")
+        else:
+            print(f"⚠️  Fix generation failed validation: {orchestration_result.get('reason')}")
+            if orchestration_result.get("fix"):
+                print("\nProposed (but potentially flawed) fix:")
+                print(orchestration_result["fix"])
+
     else:
-        print("👋 Fix skipped. Good luck with your debugging!")
+        print("👋 Debugging complete. Good luck!")
 
 if __name__ == "__main__":
-    # Now you can handle any file! 
-    # If you run: python3 main.py test.py, it will debug test.py
-    if len(sys.argv) > 1:
-        run_tech_voyagers(sys.argv[1])
-    else:
-        # Default back to demo_bug.py if no file is provided
-        run_tech_voyagers("demo_bug.py")
+    target = sys.argv[1] if len(sys.argv) > 1 else "demo_bug.py"
+    try:
+        asyncio.run(run_tech_voyagers(target))
+    except KeyboardInterrupt:
+        print("\n👋 Goodbye!")
+    except Exception as exc:
+        print(f"\n❌ Unexpected CLI Failure: {exc}")
+        logger.exception("CLI crash")

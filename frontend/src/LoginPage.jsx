@@ -69,20 +69,18 @@ export default function LoginPage({ onLogin }) {
 
     return (
         <div className="login-page">
-            {/* Animated background particles */}
             <div className="login-particles">
-                {[...Array(6)].map((_, i) => (
+                {[...Array(3)].map((_, i) => (
                     <div key={i} className={`login-particle particle-${i}`} />
                 ))}
             </div>
 
             <Motion.div
                 className="login-container"
-                initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             >
-                {/* Logo */}
                 <div className="login-logo">
                     <div className="login-logo-icon">
                         <Zap size={32} color="white" fill="white" />
@@ -94,37 +92,22 @@ export default function LoginPage({ onLogin }) {
                 </div>
 
                 <p className="login-subtitle">
-                    {isRegister ? 'Create your account' : 'Sign in to continue'}
+                    {isRegister ? 'Join the next generation of debugging' : 'Initialize secure session'}
                 </p>
 
-                {/* Form */}
-                <Motion.form
-                    onSubmit={handleSubmit}
-                    className={`login-form ${shake ? 'login-shake' : ''}`}
-                >
-                    <AnimatePresence mode="wait">
-                        {isRegister && (
-                            <Motion.div
-                                key="displayName"
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                <div className="login-input-group">
-                                    <User size={18} className="login-input-icon" />
-                                    <input
-                                        type="text"
-                                        placeholder="Display Name"
-                                        value={displayName}
-                                        onChange={e => setDisplayName(e.target.value)}
-                                        className="login-input"
-                                        autoComplete="name"
-                                    />
-                                </div>
-                            </Motion.div>
-                        )}
-                    </AnimatePresence>
+                <form onSubmit={handleSubmit} className="login-form">
+                    {isRegister && (
+                        <div className="login-input-group">
+                            <User size={18} className="login-input-icon" />
+                            <input
+                                type="text"
+                                placeholder="Full Name"
+                                value={displayName}
+                                onChange={e => setDisplayName(e.target.value)}
+                                className="login-input"
+                            />
+                        </div>
+                    )}
 
                     <div className="login-input-group">
                         <User size={18} className="login-input-icon" />
@@ -135,8 +118,6 @@ export default function LoginPage({ onLogin }) {
                             onChange={e => setUsername(e.target.value)}
                             className="login-input"
                             required
-                            autoComplete="username"
-                            autoFocus
                         />
                     </div>
 
@@ -144,61 +125,37 @@ export default function LoginPage({ onLogin }) {
                         <Lock size={18} className="login-input-icon" />
                         <input
                             type="password"
-                            placeholder="Password"
+                            placeholder="Auth Key"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             className="login-input"
                             required
-                            autoComplete={isRegister ? 'new-password' : 'current-password'}
                         />
                     </div>
 
-                    <AnimatePresence>
-                        {error && (
-                            <Motion.div
-                                className="login-error"
-                                initial={{ opacity: 0, y: -5 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                            >
-                                {error}
-                            </Motion.div>
-                        )}
-                    </AnimatePresence>
+                    {error && <div className="login-error">{error}</div>}
 
                     <button type="submit" className="login-submit" disabled={loading}>
-                        {loading ? (
-                            <Motion.div
-                                className="login-spinner"
-                                animate={{ rotate: 360 }}
-                                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                            />
-                        ) : (
-                            <>
-                                {isRegister ? <UserPlus size={18} /> : <LogIn size={18} />}
-                                {isRegister ? 'Create Account' : 'Sign In'}
-                                <ArrowRight size={16} />
-                            </>
-                        )}
+                        {loading ? 'Authenticating...' : (isRegister ? 'Create Profile' : 'Access Terminal')}
+                        {!loading && <ArrowRight size={18} />}
                     </button>
-                </Motion.form>
+                </form>
 
-                {/* Toggle */}
                 <div className="login-toggle">
                     <span className="login-toggle-text">
-                        {isRegister ? 'Already have an account?' : "Don't have an account?"}
+                        {isRegister ? 'Already registered?' : 'New developer?'}
                     </span>
                     <button
                         type="button"
                         className="login-toggle-btn"
                         onClick={() => { setIsRegister(!isRegister); setError('') }}
                     >
-                        {isRegister ? 'Sign In' : 'Create Account'}
+                        {isRegister ? 'Sign In' : 'Register Access'}
                     </button>
                 </div>
 
                 <div className="login-footer">
-                    <span>100% Offline · Privacy-first · Local Authentication</span>
+                    100% OFFLINE NEURAL PIPELINE
                 </div>
             </Motion.div>
         </div>
