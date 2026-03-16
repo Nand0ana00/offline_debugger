@@ -19,6 +19,7 @@ import {
   BarChart3, RefreshCcw, Clock3, ListChecks,
   LogOut
 } from 'lucide-react'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { fetchJson, fetchJsonWithMeta } from './lib/api'
 import LoginPage from './LoginPage'
 
@@ -665,7 +666,11 @@ function App() {
   })
 
   useEffect(() => {
-    const handleExpired = () => setAuthUser(null)
+    const handleExpired = () => {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_user')
+      setAuthUser(null)
+    }
     window.addEventListener('auth_expired', handleExpired)
     return () => window.removeEventListener('auth_expired', handleExpired)
   }, [])
@@ -683,11 +688,39 @@ function App() {
     setAuthUser(null)
   }
 
-  if (!authUser) {
-    return <LoginPage onLogin={handleLogin} />
-  }
+  return (
+    <Router>
+      <AppRoutes authUser={authUser} onLogin={handleLogin} onLogout={handleLogout} />
+    </Router>
+  )
+}
 
-  return <MainApp authUser={authUser} onLogout={handleLogout} />
+function AppRoutes({ authUser, onLogin, onLogout }) {
+  const location = useLocation()
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route
+          path="/"
+          element={!authUser ? (
+            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <LoginPage onLogin={onLogin} />
+            </Motion.div>
+          ) : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/dashboard"
+          element={authUser ? (
+            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <MainApp authUser={authUser} onLogout={onLogout} />
+            </Motion.div>
+          ) : <Navigate to="/" replace />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AnimatePresence>
+  )
 }
 
 function MainApp({ authUser, onLogout }) {

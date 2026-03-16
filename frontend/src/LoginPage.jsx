@@ -68,7 +68,7 @@ export default function LoginPage({ onLogin }) {
     }
 
     return (
-        <div className="login-page">
+        <div className="login-page" style={{ position: 'fixed', inset: 0, zIndex: 9999 }}>
             <div className="login-particles">
                 {[...Array(3)].map((_, i) => (
                     <div key={i} className={`login-particle particle-${i}`} />
